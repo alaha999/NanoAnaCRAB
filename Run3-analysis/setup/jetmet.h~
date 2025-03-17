@@ -1,0 +1,237 @@
+#include "correction.h"
+#include "TRandom3.h"
+
+auto json2018 = correction::CorrectionSet::from_file("setup/POG/JME/2018_UL/jet_jerc.json.gz"); 
+auto jecsflabel2018 = "Summer19UL18_V5_MC_Total_AK4PFchs";
+auto jecsfjson2018  = json2018->at(jecsflabel2018);
+auto jersflabel2018 = "Summer19UL18_JRV2_MC_ScaleFactor_AK4PFchs";
+auto jersfjson2018  = json2018->at(jersflabel2018);
+auto ptreslabel2018 = "Summer19UL18_JRV2_MC_PtResolution_AK4PFchs";
+auto ptresjson2018  = json2018->at(ptreslabel2018);
+
+auto json2017 = correction::CorrectionSet::from_file("setup/POG/JME/2017_UL/jet_jerc.json.gz"); 
+auto jecsflabel2017 = "Summer19UL17_V5_MC_Total_AK4PFchs";
+auto jecsfjson2017  = json2017->at(jecsflabel2017);
+auto jersflabel2017 = "Summer19UL17_JRV2_MC_ScaleFactor_AK4PFchs";
+auto jersfjson2017  = json2017->at(jersflabel2017);
+auto ptreslabel2017 = "Summer19UL17_JRV2_MC_PtResolution_AK4PFchs";
+auto ptresjson2017  = json2017->at(ptreslabel2017);
+
+auto json2016postVFP = correction::CorrectionSet::from_file("setup/POG/JME/2016postVFP_UL/jet_jerc.json.gz"); 
+auto jecsflabel2016postVFP = "Summer19UL16_V7_MC_Total_AK4PFchs";
+auto jecsfjson2016postVFP  = json2016postVFP->at(jecsflabel2016postVFP);
+auto jersflabel2016postVFP = "Summer20UL16_JRV3_MC_ScaleFactor_AK4PFchs";
+auto jersfjson2016postVFP  = json2016postVFP->at(jersflabel2016postVFP);
+auto ptreslabel2016postVFP = "Summer20UL16_JRV3_MC_PtResolution_AK4PFchs";
+auto ptresjson2016postVFP  = json2016postVFP->at(ptreslabel2016postVFP);
+
+auto json2016preVFP = correction::CorrectionSet::from_file("setup/POG/JME/2016preVFP_UL/jet_jerc.json.gz"); 
+auto jecsflabel2016preVFP = "Summer19UL16APV_V7_MC_Total_AK4PFchs";
+auto jecsfjson2016preVFP  = json2016preVFP->at(jecsflabel2016preVFP);
+auto jersflabel2016preVFP = "Summer20UL16APV_JRV3_MC_ScaleFactor_AK4PFchs";
+auto jersfjson2016preVFP  = json2016preVFP->at(jersflabel2016preVFP);
+auto ptreslabel2016preVFP = "Summer20UL16APV_JRV3_MC_PtResolution_AK4PFchs";
+auto ptresjson2016preVFP  = json2016preVFP->at(ptreslabel2016preVFP);
+
+
+
+float VLLAna::jetSF(float pt, float eta, string era, string mode){
+  
+  std::vector<correction::Variable::Type>  values;
+  values.emplace_back(eta);
+  values.emplace_back(pt);
+  
+  float unc = 0.;
+  float sf  = 1.0;
+
+  if( era=="2018" ){
+    unc=jecsfjson2018->evaluate(values);
+  }
+  if( era=="2017" ){
+    unc=jecsfjson2017->evaluate(values);
+  }
+  if( era=="2016postVFP" ){
+    unc=jecsfjson2016postVFP->evaluate(values);
+  }
+  if( era=="2016preVFP" ){
+    unc=jecsfjson2016preVFP->evaluate(values);
+  }
+  
+  if (      mode =="up"  ) {sf = 1.0+unc;}
+  else if ( mode =="down") {sf = 1.0-unc;}
+  else                     {sf =1.;}
+  
+  return sf;
+}
+
+float VLLAna::jetRF(float pt, float eta, float phi, int matchedjetidx, float genpt, float geneta, float genphi, float rho, string era, string mode){
+  
+  //https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution#Smearing_procedures
+  
+  std::vector<correction::Variable::Type>  jersfvalues;
+  std::vector<correction::Variable::Type>  ptresvalues;
+  jersfvalues.emplace_back(eta);
+  jersfvalues.emplace_back(mode);
+  //
+  ptresvalues.emplace_back(eta);
+  ptresvalues.emplace_back(pt);
+  ptresvalues.emplace_back(rho); //NanoAODv9 branch: fixedGridRhoFastjetAll
+  //
+  float sjer=1.0;
+  float sigmajer=0.;
+  float cjer =1.0;
+  //
+  if( era=="2018" ){
+    sjer  = jersfjson2018->evaluate(jersfvalues);
+    sigmajer = ptresjson2018->evaluate(ptresvalues);
+  }
+  if( era=="2017" ){
+    sjer  = jersfjson2017->evaluate(jersfvalues);
+    sigmajer = ptresjson2017->evaluate(ptresvalues);
+  }
+  if( era=="2016postVFP" ){
+    sjer  = jersfjson2016postVFP->evaluate(jersfvalues);
+    sigmajer = ptresjson2016postVFP->evaluate(ptresvalues);
+  }
+  if( era=="2016preVFP" ){
+    sjer  = jersfjson2016preVFP->evaluate(jersfvalues);
+    sigmajer = ptresjson2016preVFP->evaluate(ptresvalues);
+  }
+  
+  //genjet matching
+  TLorentzVector recojetv;
+  recojetv.SetPtEtaPhiM(pt,eta,phi,0);
+
+  bool isGenMatched = false;
+  
+  if(matchedjetidx>0){
+    TLorentzVector genjetv;
+    genjetv.SetPtEtaPhiM(genpt,geneta,genphi,0);
+    float dr = recojetv.DeltaR(genjetv);
+    
+    if(dr<0.2 && (abs(pt - genpt)<(3*pt*sigmajer)))isGenMatched=true;
+  }
+  
+  //Hybrid method(Usual scaling + stochastic scaling)
+  if(isGenMatched){
+    cjer = 1.+(sjer-1.)*((pt-genpt)/pt);
+  }
+  else{
+    TRandom3* gRandom = new TRandom3();
+    gRandom->SetSeed(0);
+    float n = gRandom->Gaus( 0., sigmajer );
+    cjer = 1.+n*(sqrt(max( sjer*sjer-1., 0. )));
+  }
+  if(cjer<0.){cjer=0.;} //cjer is truncated at zero as required
+  
+
+  return cjer;
+}
+
+
+std::pair<float,float> VLLAna::METXYCorr_Met_MetPhi(float uncormet, float uncormet_phi,int runnb, string year, bool isData,int npv){
+  
+  bool isUL=true;
+  bool isMC=!isData;
+  
+  //Initialize
+  std::pair<float,float>  TheXYCorr_Met_MetPhi(uncormet,uncormet_phi);
+  if(npv>100) npv=100;
+  
+  string runera = "";
+  
+  if     (isMC && year == "2016preVFP" && isUL) runera = "yUL2016MCAPV";
+  else if(isMC && year == "2016postVFP" && isUL) runera = "yUL2016MCnonAPV";
+  else if(isMC && year == "2017" && isUL) runera = "yUL2017MC";
+  else if(isMC && year == "2018" && isUL) runera = "yUL2018MC";
+  
+  else if(!isMC && runnb >=315252 && runnb <=316995 && isUL) runera = "yUL2018A";
+  else if(!isMC && runnb >=316998 && runnb <=319312 && isUL) runera = "yUL2018B";
+  else if(!isMC && runnb >=319313 && runnb <=320393 && isUL) runera = "yUL2018C";
+  else if(!isMC && runnb >=320394 && runnb <=325273 && isUL) runera = "yUL2018D";
+
+  else if(!isMC && runnb >=297020 && runnb <=299329 && isUL){ runera = "yUL2017B";}
+  else if(!isMC && runnb >=299337 && runnb <=302029 && isUL){ runera = "yUL2017C";}
+  else if(!isMC && runnb >=302030 && runnb <=303434 && isUL){ runera = "yUL2017D";}
+  else if(!isMC && runnb >=303435 && runnb <=304826 && isUL){ runera = "yUL2017E";}
+  else if(!isMC && runnb >=304911 && runnb <=306462 && isUL){ runera = "yUL2017F";}
+
+  else if(!isMC && runnb >=272007 && runnb <=275376 && isUL) runera = "yUL2016B";
+  else if(!isMC && runnb >=275657 && runnb <=276283 && isUL) runera = "yUL2016C";
+  else if(!isMC && runnb >=276315 && runnb <=276811 && isUL) runera = "yUL2016D";
+  else if(!isMC && runnb >=276831 && runnb <=277420 && isUL) runera = "yUL2016E";
+  else if(!isMC && ((runnb >=277772 && runnb <=278768) || runnb==278770) && isUL) runera = "yUL2016F";
+  else if(!isMC && ((runnb >=278801 && runnb <=278808) || runnb==278769) && isUL) runera = "yUL2016Flate";
+  else if(!isMC && runnb >=278820 && runnb <=280385 && isUL) runera = "yUL2016G";
+  else if(!isMC && runnb >=280919 && runnb <=284044 && isUL) runera = "yUL2016H";
+
+
+  double METxcorr(0.),METycorr(0.);
+
+  //UL2016
+  if(runera=="yUL2016B") METxcorr = -(-0.0214894*npv +-0.188255);
+  if(runera=="yUL2016B") METycorr = -(0.0876624*npv +0.812885);
+  if(runera=="yUL2016C") METxcorr = -(-0.032209*npv +0.067288);
+  if(runera=="yUL2016C") METycorr = -(0.113917*npv +0.743906);
+  if(runera=="yUL2016D") METxcorr = -(-0.0293663*npv +0.21106);
+  if(runera=="yUL2016D") METycorr = -(0.11331*npv +0.815787);
+  if(runera=="yUL2016E") METxcorr = -(-0.0132046*npv +0.20073);
+  if(runera=="yUL2016E") METycorr = -(0.134809*npv +0.679068);
+  if(runera=="yUL2016F") METxcorr = -(-0.0543566*npv +0.816597);
+  if(runera=="yUL2016F") METycorr = -(0.114225*npv +1.17266);
+  if(runera=="yUL2016Flate") METxcorr = -(0.134616*npv +-0.89965);
+  if(runera=="yUL2016Flate") METycorr = -(0.0397736*npv +1.0385);
+  if(runera=="yUL2016G") METxcorr = -(0.121809*npv +-0.584893);
+  if(runera=="yUL2016G") METycorr = -(0.0558974*npv +0.891234);
+  if(runera=="yUL2016H") METxcorr = -(0.0868828*npv +-0.703489);
+  if(runera=="yUL2016H") METycorr = -(0.0888774*npv +0.902632);
+  if(runera=="yUL2016MCnonAPV") METxcorr = -(-0.153497*npv +-0.231751);
+  if(runera=="yUL2016MCnonAPV") METycorr = -(0.00731978*npv +0.243323);
+  if(runera=="yUL2016MCAPV") METxcorr = -(-0.188743*npv +0.136539);
+  if(runera=="yUL2016MCAPV") METycorr = -(0.0127927*npv +0.117747);
+  
+  //UL2017
+  if(runera=="yUL2017B") METxcorr = -(-0.211161*npv +0.419333);
+  if(runera=="yUL2017B") METycorr = -(0.251789*npv +-1.28089);
+  if(runera=="yUL2017C") METxcorr = -(-0.185184*npv +-0.164009);
+  if(runera=="yUL2017C") METycorr = -(0.200941*npv +-0.56853);
+  if(runera=="yUL2017D") METxcorr = -(-0.201606*npv +0.426502);
+  if(runera=="yUL2017D") METycorr = -(0.188208*npv +-0.58313);
+  if(runera=="yUL2017E") METxcorr = -(-0.162472*npv +0.176329);
+  if(runera=="yUL2017E") METycorr = -(0.138076*npv +-0.250239);
+  if(runera=="yUL2017F") METxcorr = -(-0.210639*npv +0.72934);
+  if(runera=="yUL2017F") METycorr = -(0.198626*npv +1.028);
+  if(runera=="yUL2017MC") METxcorr = -(-0.300155*npv +1.90608);
+  if(runera=="yUL2017MC") METycorr = -(0.300213*npv +-2.02232);
+  
+  //UL2018
+  if(runera=="yUL2018A") METxcorr = -(0.263733*npv +-1.91115);
+  if(runera=="yUL2018A") METycorr = -(0.0431304*npv +-0.112043);
+  if(runera=="yUL2018B") METxcorr = -(0.400466*npv +-3.05914);
+  if(runera=="yUL2018B") METycorr = -(0.146125*npv +-0.533233);
+  if(runera=="yUL2018C") METxcorr = -(0.430911*npv +-1.42865);
+  if(runera=="yUL2018C") METycorr = -(0.0620083*npv +-1.46021);
+  if(runera=="yUL2018D") METxcorr = -(0.457327*npv +-1.56856);
+  if(runera=="yUL2018D") METycorr = -(0.0684071*npv +-0.928372);
+  if(runera=="yUL2018MC") METxcorr = -(0.183518*npv +0.546754);
+  if(runera=="yUL2018MC") METycorr = -(0.192263*npv +-0.42121);
+
+
+  float CorrectedMET_x = uncormet *cos( uncormet_phi)+METxcorr;
+  float CorrectedMET_y = uncormet *sin( uncormet_phi)+METycorr;  
+
+  float CorrectedMET = sqrt(CorrectedMET_x*CorrectedMET_x+CorrectedMET_y*CorrectedMET_y);
+  float CorrectedMETPhi;
+  if(CorrectedMET_x==0 && CorrectedMET_y>0) CorrectedMETPhi = TMath::Pi();
+  else if(CorrectedMET_x==0 && CorrectedMET_y<0 )CorrectedMETPhi = -TMath::Pi();
+  else if(CorrectedMET_x >0) CorrectedMETPhi = TMath::ATan(CorrectedMET_y/CorrectedMET_x);
+  else if(CorrectedMET_x <0&& CorrectedMET_y>0) CorrectedMETPhi = TMath::ATan(CorrectedMET_y/CorrectedMET_x) + TMath::Pi();
+  else if(CorrectedMET_x <0&& CorrectedMET_y<0) CorrectedMETPhi = TMath::ATan(CorrectedMET_y/CorrectedMET_x) - TMath::Pi();
+  else CorrectedMETPhi =0;
+  
+  TheXYCorr_Met_MetPhi.first= CorrectedMET;
+  TheXYCorr_Met_MetPhi.second= CorrectedMETPhi;
+
+  return TheXYCorr_Met_MetPhi;  
+  
+}

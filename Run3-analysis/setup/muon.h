@@ -1,0 +1,91 @@
+#include "correction.h"
+
+auto muonjson2022 = correction::CorrectionSet::from_file("setup/POG/MUO/2022_Summer22/muon_Z.json.gz");
+auto muoniso2022  = muonjson2022->at("NUM_TightPFIso_DEN_MediumID");
+auto muonid2022   = muonjson2022->at("NUM_MediumID_DEN_TrackerMuons");
+
+auto muonjson2022EE = correction::CorrectionSet::from_file("setup/POG/MUO/2022_Summer22EE/muon_Z.json.gz");
+auto muoniso2022EE  = muonjson2022EE->at("NUM_TightPFIso_DEN_MediumID");
+auto muonid2022EE   = muonjson2022EE->at("NUM_MediumID_DEN_TrackerMuons");
+
+auto muonjson2023 = correction::CorrectionSet::from_file("setup/POG/MUO/2023_Summer23/muon_Z.json.gz");
+auto muoniso2023  = muonjson2023->at("NUM_TightPFIso_DEN_MediumID");
+auto muonid2023   = muonjson2023->at("NUM_MediumID_DEN_TrackerMuons");
+
+auto muonjson2023BPix = correction::CorrectionSet::from_file("setup/POG/MUO/2023_Summer23BPix/muon_Z.json.gz");
+auto muoniso2023BPix  = muonjson2023BPix->at("NUM_TightPFIso_DEN_MediumID");
+auto muonid2023BPix   = muonjson2023BPix->at("NUM_MediumID_DEN_TrackerMuons");
+
+
+auto muonjson2018 = correction::CorrectionSet::from_file("setup/POG/MUO/2018_UL/muon_Z.json.gz");
+auto muoniso2018  = muonjson2018->at("NUM_TightRelIso_DEN_MediumID");
+auto muonid2018   = muonjson2018->at("NUM_MediumID_DEN_genTracks");
+
+auto muonjson2017 = correction::CorrectionSet::from_file("setup/POG/MUO/2017_UL/muon_Z.json.gz");
+auto muoniso2017  = muonjson2017->at("NUM_TightRelIso_DEN_MediumID");
+auto muonid2017   = muonjson2017->at("NUM_MediumID_DEN_genTracks");
+
+auto muonjson2016postVFP = correction::CorrectionSet::from_file("setup/POG/MUO/2016postVFP_UL/muon_Z.json.gz");
+auto muoniso2016postVFP  = muonjson2016postVFP->at("NUM_TightRelIso_DEN_MediumID");
+auto muonid2016postVFP   = muonjson2016postVFP->at("NUM_MediumID_DEN_genTracks");
+
+auto muonjson2016preVFP = correction::CorrectionSet::from_file("setup/POG/MUO/2016preVFP_UL/muon_Z.json.gz");
+auto muoniso2016preVFP  = muonjson2016preVFP->at("NUM_TightRelIso_DEN_MediumID");
+auto muonid2016preVFP   = muonjson2016preVFP->at("NUM_MediumID_DEN_genTracks");
+
+
+float VLLAna::muonIDSF(float pt, float eta, string era, string mode){
+  string mode_;
+  if(      mode=="nom"  ) mode_="nominal";
+  else if( mode=="up"   ) mode_="systup";
+  else if( mode=="down" ) mode_="systdown";
+  
+  string era_ = era+"_UL";
+  
+  std::vector<correction::Variable::Type>values;
+  //values.emplace_back(era_);
+  values.emplace_back(fabs(eta));
+  values.emplace_back(pt);
+  values.emplace_back(mode_);
+
+  float sf = 1.0;
+  if( pt >15. && fabs(eta)<2.4){
+    if(era=="2018" )       {sf = muonid2018->evaluate(values);}
+    if(era=="2017" )       {sf = muonid2017->evaluate(values);}
+    if(era=="2016postVFP" ){sf = muonid2016postVFP->evaluate(values);}
+    if(era=="2016preVFP" ) {sf = muonid2016preVFP->evaluate(values);}
+    if(era=="2022")         sf = muonid2022->evaluate(values);
+    if(era=="2022EE")       sf = muonid2022EE->evaluate(values);
+    if(era=="2023")         sf = muonid2023->evaluate(values);
+    if(era=="2023BPix")     sf = muonid2023BPix->evaluate(values);
+  }
+  return sf;
+}
+
+float VLLAna::muonIsoSF(float pt, float eta, string era, string mode){
+  string mode_;
+  if(      mode=="nom"  ) mode_="nominal";
+  else if( mode=="up"   ) mode_="systup";
+  else if( mode=="down" ) mode_="systdown";
+  
+  string era_ = era+"_UL";
+  
+  std::vector<correction::Variable::Type>  values;
+  //values.emplace_back(era_);
+  values.emplace_back(fabs(eta));
+  values.emplace_back(pt);
+  values.emplace_back(mode_);
+  
+  float sf = 1.0;
+  if( pt >15. && fabs(eta)<2.4){
+    if( era=="2018" )       {sf = muoniso2018->evaluate(values);}
+    if( era=="2017" )       {sf = muoniso2017->evaluate(values);}
+    if( era=="2016postVFP" ){sf = muoniso2016postVFP->evaluate(values);}
+    if( era=="2016preVFP" ) {sf = muoniso2016preVFP->evaluate(values);}
+    if(era=="2022")          sf = muoniso2022->evaluate(values);
+    if(era=="2022EE")        sf = muoniso2022EE->evaluate(values);
+    if(era=="2023")          sf = muoniso2023->evaluate(values);
+    if(era=="2023BPix")      sf = muoniso2023BPix->evaluate(values);    
+  }
+  return sf;
+}

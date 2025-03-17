@@ -1,0 +1,57 @@
+#include "nlohmann/json.hpp"
+#include <iostream>
+#include <fstream>
+
+using json = nlohmann::json;
+
+json VLLAna::load_json_data(int year){
+  string jsonfilename;
+  if(     year==2016){ jsonfilename="setup/goldenjsonfiles/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json";   }
+  else if(year==2017){ jsonfilename="setup/goldenjsonfiles/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.json"; }
+  else if(year==2018){ jsonfilename="setup/goldenjsonfiles/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json";   }
+  //Cert_Collisions2022_355100_362760_Golden.json
+  //
+  std::ifstream f(jsonfilename);
+  json jsondata = json::parse(f);
+  f.close();
+  
+  return jsondata;
+}
+
+int VLLAna::checkJson(bool isData, int runno, int lsno){
+  
+  if(!isData) return 1; //MC always passes this filter
+
+  int year=0;
+  int output=0;
+  
+  if( runno==271036 || runno==284044 || (runno>271036 && runno<284044) ){ year=2016; }
+  if( runno==294927 || runno==306462 || (runno>294927 && runno<306462) ){ year=2017; }
+  if( runno==314472 || runno==325175 || (runno>314472 && runno<325175) ){ year=2018; }
+  if( runno==355100 || runno==362760 || (runno>355100 && runno<362760) ){ year=2022; }
+  if( runno==366442 || runno==370790 || (runno>366442 && runno<370790) ){ year=2023; }
+  //
+  //string jsonfilename;
+  //if(     year==2016){ jsonfilename="setup/goldenjsonfiles/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json";   }
+  //else if(year==2017){ jsonfilename="setup/goldenjsonfiles/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.json"; }
+  //else if(year==2018){ jsonfilename="setup/goldenjsonfiles/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json";   }
+  //else               { return output; }
+  //
+  //std::ifstream f(jsonfilename);
+  //json jsondata = json::parse(f);
+  //f.close();  
+  //
+  std::string strrunno = std::to_string(runno);
+  auto checkrun = jsondata.find(strrunno);
+  //
+  if( checkrun != jsondata.end()){
+    auto runfilter  = *checkrun;
+    for( unsigned int i=0; i<runfilter.size(); i++ ){
+      int runfilterbegin = runfilter.at(i).at(0);
+      int runfilterend   = runfilter.at(i).at(1);
+      if( lsno==runfilterbegin || lsno==runfilterend || (lsno>runfilterbegin && lsno<runfilterend) ){ output=1;  break; }
+    }
+  }
+  //
+  return output;
+}

@@ -1,0 +1,3 @@
+#include "RoccoR/RoccoR.cc"
+
+RoccoR rc2018= rc("RoccoR/RoccoR2018UL.tex")
